@@ -15,25 +15,48 @@ if [ ! -f "$CONF_FILE" ]; then
     exit 1
 fi
 
-# 执行操作
+# 检测/mnt/DSM/下的.pat文件
+PAT_FILES=(/mnt/DSM/*.pat)
+# 过滤掉不匹配
+PAT_COUNT=0
+for file in "${PAT_FILES[@]}"; do
+    if [ -f "$file" ]; then
+        ((PAT_COUNT++))
+        PAT_PATH="$file"
+    fi
+done
+
+# 处理.pat文件数量
+if [ $PAT_COUNT -eq 0 ]; then
+    echo "错误：/mnt/DSM/目录下未找到.pat文件！"
+    exit 1
+elif [ $PAT_COUNT -gt 1 ]; then
+    echo "错误：/mnt/DSM/目录下找到多个.pat文件，请删除多余文件后再执行脚本！"
+    exit 1
+fi
+
+# 执行sed替换操作
 sed -i 's/unprivileged: 1/unprivileged: 0/' "$CONF_FILE"
 
 # 处理确认参数
 if [ $# -eq 2 ]; then
     CONFIRM=$2
 else
+    # 交互式询问
     read -p "是否确认添加配置信息到 $CONF_FILE？(y/n) " -n 1 -r
     echo
     CONFIRM=$REPLY
 fi
 
+# 判断是否确认
 if [[ $CONFIRM =~ ^[Yy]$ ]]; then
+    # 追加配置信息到文件（使用自动检测的PAT_PATH）
     cat << EOF >> "$CONF_FILE"
 dev0: /dev/kvm
 dev1: /dev/net/tun
 dev2: /dev/vhost-net
 lxc.mount.entry: /dev/shm dev/shm none bind,create=dir 0 0
-lxc.mount.entry: /mnt/DSM/DSM_VirtualDSM_25556.pat boot.pat none bind,create=file 0
+lxc.mount.entry: $PAT_PATH boot.pat none bind,create=file 0
 lxc.apparmor.profile: unconfined
 lxc.cap.drop: 
 lxc.cgroup2.devices.allow: c *:* rwm
